@@ -237,7 +237,11 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
                     if (existingIndex >= 0)
                     {
                         SitemapEntry existing = entries[existingIndex];
-                        entries[existingIndex] = compiledEntry with { Metadata = metadata.HasAnyValue ? metadata : existing.Metadata };
+                        entries[existingIndex] = compiledEntry with
+                        {
+                            Metadata = metadata.HasAnyValue ? metadata : existing.Metadata,
+                            SourceLastModified = existing.SourceLastModified
+                        };
                     }
                     else
                     {
