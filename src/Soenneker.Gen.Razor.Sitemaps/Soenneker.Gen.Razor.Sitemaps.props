@@ -1,0 +1,24 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <_RazorSitemapAttributeSourceFromPackage>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs'))</_RazorSitemapAttributeSourceFromPackage>
+        <_RazorSitemapAttributeSourceFromProject>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'SitemapAttribute.cs'))</_RazorSitemapAttributeSourceFromProject>
+        <_RazorSitemapAttributeSource Condition="'$(_RazorSitemapAttributeSource)'=='' and Exists('$(_RazorSitemapAttributeSourceFromPackage)')">$(_RazorSitemapAttributeSourceFromPackage)</_RazorSitemapAttributeSource>
+        <_RazorSitemapAttributeSource Condition="'$(_RazorSitemapAttributeSource)'=='' and Exists('$(_RazorSitemapAttributeSourceFromProject)')">$(_RazorSitemapAttributeSourceFromProject)</_RazorSitemapAttributeSource>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(RazorSitemapDisableAttributeCompile)'!='true' and '$(_RazorSitemapAttributeCompileAdded)'!='true'">
+        <Compile Include="$(_RazorSitemapAttributeSource)" Link="Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" Visible="false" Condition="'$(_RazorSitemapAttributeSource)'!=''" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(RazorSitemapDisableAttributeCompile)'!='true' and '$(_RazorSitemapAttributeCompileAdded)'!='true'">
+        <_RazorSitemapAttributeCompileAdded>true</_RazorSitemapAttributeCompileAdded>
+    </PropertyGroup>
+
+    <Target Name="AddRazorSitemapAttributeCompile"
+            BeforeTargets="CoreCompile"
+            Condition="'$(RazorSitemapDisableAttributeCompile)'!='true'">
+        <ItemGroup>
+            <Compile Include="$(_RazorSitemapAttributeSource)" Link="Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" Visible="false" Condition="'$(_RazorSitemapAttributeSource)'!=''" />
+        </ItemGroup>
+    </Target>
+</Project>

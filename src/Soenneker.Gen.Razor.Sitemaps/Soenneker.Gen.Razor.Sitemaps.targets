@@ -1,0 +1,45 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+    <Target Name="RazorSitemapGeneratorBuild_Imported" BeforeTargets="Build">
+        <Message Importance="high" Text="Soenneker.Gen.Razor.Sitemaps targets imported from: $(MSBuildThisFileFullPath)" />
+    </Target>
+
+    <PropertyGroup>
+        <_RazorSitemapBuildTasksDllFromPackage>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll'))</_RazorSitemapBuildTasksDllFromPackage>
+        <_RazorSitemapBuildTasksDllFromBuildTransitive>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', 'buildTransitive', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll'))))</_RazorSitemapBuildTasksDllFromBuildTransitive>
+        <_RazorSitemapBuildTasksDllFromProject>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks', 'bin', '$(Configuration)', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll'))))</_RazorSitemapBuildTasksDllFromProject>
+        <RazorSitemapBuildTasksDllPath Condition="'$(RazorSitemapBuildTasksDllPath)'=='' and Exists('$(_RazorSitemapBuildTasksDllFromPackage)')">$(_RazorSitemapBuildTasksDllFromPackage)</RazorSitemapBuildTasksDllPath>
+        <RazorSitemapBuildTasksDllPath Condition="'$(RazorSitemapBuildTasksDllPath)'=='' and Exists('$(_RazorSitemapBuildTasksDllFromBuildTransitive)')">$(_RazorSitemapBuildTasksDllFromBuildTransitive)</RazorSitemapBuildTasksDllPath>
+        <RazorSitemapBuildTasksDllPath Condition="'$(RazorSitemapBuildTasksDllPath)'=='' and Exists('$(_RazorSitemapBuildTasksDllFromProject)')">$(_RazorSitemapBuildTasksDllFromProject)</RazorSitemapBuildTasksDllPath>
+        <RazorSitemapEnabled Condition="'$(RazorSitemapEnabled)'==''">false</RazorSitemapEnabled>
+        <RazorSitemapOutputPath Condition="'$(RazorSitemapOutputPath)'==''">wwwroot/sitemap.xml</RazorSitemapOutputPath>
+        <RazorSitemapIncludeUnannotatedPages Condition="'$(RazorSitemapIncludeUnannotatedPages)'==''">true</RazorSitemapIncludeUnannotatedPages>
+        <_RazorSitemapProjectDir>$([System.IO.Path]::GetDirectoryName('$(ProjectDir)x'))</_RazorSitemapProjectDir>
+        <_RazorSitemapProjectDir Condition="'$(_RazorSitemapProjectDir)' == ''">$(MSBuildProjectDirectory)</_RazorSitemapProjectDir>
+        <_RazorSitemapBaseUrlArg Condition="'$(RazorSitemapBaseUrl)' != ''"> --baseUrl &quot;$(RazorSitemapBaseUrl)&quot;</_RazorSitemapBaseUrlArg>
+        <_RazorSitemapOutputPathArg Condition="'$(RazorSitemapOutputPath)' != ''"> --outputPath &quot;$(RazorSitemapOutputPath)&quot;</_RazorSitemapOutputPathArg>
+        <_RazorSitemapDefaultChangeFrequencyArg Condition="'$(RazorSitemapDefaultChangeFrequency)' != ''"> --defaultChangeFrequency &quot;$(RazorSitemapDefaultChangeFrequency)&quot;</_RazorSitemapDefaultChangeFrequencyArg>
+        <_RazorSitemapDefaultPriorityArg Condition="'$(RazorSitemapDefaultPriority)' != ''"> --defaultPriority &quot;$(RazorSitemapDefaultPriority)&quot;</_RazorSitemapDefaultPriorityArg>
+        <_RazorSitemapIncludeUnannotatedPagesArg> --includeUnannotatedPages &quot;$(RazorSitemapIncludeUnannotatedPages)&quot;</_RazorSitemapIncludeUnannotatedPagesArg>
+    </PropertyGroup>
+
+    <Target Name="RunRazorSitemapGeneratorBuildTasks"
+            AfterTargets="Build"
+            Condition="'$(DesignTimeBuild)'!='true' and '$(IsCrossTargetingBuild)'!='true' and '$(RazorSitemapEnabled)'=='true'">
+
+        <Message Importance="high" Text="Running Soenneker.Gen.Razor.Sitemaps BuildTasks: projectDir=$(_RazorSitemapProjectDir) output=$(RazorSitemapOutputPath)" />
+        <Error Condition="'$(_RazorSitemapProjectDir)' == ''"
+               Text="Soenneker.Gen.Razor.Sitemaps: project directory could not be resolved." />
+        <Error Condition="'$(RazorSitemapBuildTasksDllPath)'==''"
+               Text="RazorSitemapBuildTasksDllPath was not resolved. MSBuildThisFileDirectory=$(MSBuildThisFileDirectory)" />
+        <Error Condition="!Exists('$(RazorSitemapBuildTasksDllPath)')"
+               Text="Razor sitemap BuildTasks DLL not found at '$(RazorSitemapBuildTasksDllPath)'." />
+
+        <Exec WorkingDirectory="$(_RazorSitemapProjectDir)"
+              IgnoreExitCode="false"
+              ConsoleToMSBuild="true"
+              StandardOutputImportance="high"
+              StandardErrorImportance="high"
+              Command='dotnet exec &quot;$(RazorSitemapBuildTasksDllPath)&quot; --targetPath &quot;$(TargetPath)&quot; --projectDir &quot;$(_RazorSitemapProjectDir)&quot;$(_RazorSitemapBaseUrlArg)$(_RazorSitemapOutputPathArg)$(_RazorSitemapDefaultChangeFrequencyArg)$(_RazorSitemapDefaultPriorityArg)$(_RazorSitemapIncludeUnannotatedPagesArg)' />
+    </Target>
+</Project>

@@ -1,0 +1,9 @@
+@page "/search"
+@using Soenneker.Razor.Sitemap
+@attribute [Sitemap(Url = "/search?q=test&page=1")]
+
+<PageTitle>Search</PageTitle>
+
+<h1>Search</h1>
+
+<p>This page verifies that generated sitemap URLs escape query string separators.</p>

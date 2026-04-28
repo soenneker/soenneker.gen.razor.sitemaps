@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Soenneker.Tests.Unit" Version="4.0.1133" />
+        <PackageReference Include="TUnit" Version="1.40.10" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Soenneker.Gen.Razor.Sitemaps\Soenneker.Gen.Razor.Sitemaps.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+        <ProjectReference Include="..\..\src\Soenneker.Gen.Razor.Sitemaps.BuildTasks\Soenneker.Gen.Razor.Sitemaps.BuildTasks.csproj" />
+    </ItemGroup>
+
+</Project>

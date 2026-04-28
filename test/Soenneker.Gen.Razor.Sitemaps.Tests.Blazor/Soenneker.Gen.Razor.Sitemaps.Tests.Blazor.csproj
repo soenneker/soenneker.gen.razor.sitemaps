@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <RazorSitemapEnabled>true</RazorSitemapEnabled>
+    <RazorSitemapBaseUrl>https://example.com</RazorSitemapBaseUrl>
+    <RazorSitemapOutputPath>wwwroot/sitemap.xml</RazorSitemapOutputPath>
+    <RazorSitemapIncludeUnannotatedPages>true</RazorSitemapIncludeUnannotatedPages>
+    <RazorSitemapDisableAttributeCompile>true</RazorSitemapDisableAttributeCompile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Soenneker.Gen.Razor.Sitemaps\Soenneker.Gen.Razor.Sitemaps.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="..\..\src\Soenneker.Gen.Razor.Sitemaps\Soenneker.Gen.Razor.Sitemaps.props" />
+  <Import Project="..\..\src\Soenneker.Gen.Razor.Sitemaps\Soenneker.Gen.Razor.Sitemaps.targets" />
+
+</Project>
