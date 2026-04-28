@@ -384,10 +384,20 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
     private static bool IsExcludedPath(string path)
     {
-        return path.Contains("\\obj\\", StringComparison.OrdinalIgnoreCase) || path.Contains("/obj/", StringComparison.OrdinalIgnoreCase) ||
-               path.Contains("\\bin\\", StringComparison.OrdinalIgnoreCase) || path.Contains("/bin/", StringComparison.OrdinalIgnoreCase) ||
-               path.Contains("\\node_modules\\", StringComparison.OrdinalIgnoreCase) || path.Contains("/node_modules/", StringComparison.OrdinalIgnoreCase) ||
-               path.Contains("\\.git\\", StringComparison.OrdinalIgnoreCase) || path.Contains("/.git/", StringComparison.OrdinalIgnoreCase);
+        string normalized = path.Replace('\\', '/');
+
+        return IsPathSegmentExcluded(normalized, "obj") ||
+               IsPathSegmentExcluded(normalized, "bin") ||
+               IsPathSegmentExcluded(normalized, "node_modules") ||
+               IsPathSegmentExcluded(normalized, ".git");
+    }
+
+    private static bool IsPathSegmentExcluded(string path, string segment)
+    {
+        return path.Equals(segment, StringComparison.OrdinalIgnoreCase) ||
+               path.StartsWith(segment + "/", StringComparison.OrdinalIgnoreCase) ||
+               path.EndsWith("/" + segment, StringComparison.OrdinalIgnoreCase) ||
+               path.Contains("/" + segment + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetComponentName(string projectDir, string file)

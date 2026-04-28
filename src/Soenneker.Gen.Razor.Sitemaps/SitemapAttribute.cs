@@ -1,4 +1,4 @@
-namespace Soenneker.Razor.Sitemaps;
+namespace Soenneker.Razor.Sitemap;
 
 [global::System.AttributeUsage(global::System.AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public sealed class SitemapAttribute : global::System.Attribute
