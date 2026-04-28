@@ -19,6 +19,7 @@ namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSitemapGeneratorWriteRunner
 {
     private const string _sitemapAttributeName = "Soenneker.Razor.Sitemap.SitemapAttribute";
+    private const string _sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
 
     private readonly IFileUtil _fileUtil;
     private readonly IDirectoryUtil _directoryUtil;
@@ -296,26 +297,26 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         using var stream = new MemoryStream();
         using XmlWriter writer = XmlWriter.Create(stream, settings);
         writer.WriteStartDocument();
-        writer.WriteStartElement("urlset", "http://www.sitemaps.org/schemas/sitemap/0.9");
+        writer.WriteStartElement("urlset", _sitemapNamespace);
 
         foreach (SitemapEntry entry in entries)
         {
             string location = BuildLocation(baseUrl, entry.Route);
 
-            writer.WriteStartElement("url");
-            writer.WriteElementString("loc", location);
+            writer.WriteStartElement("url", _sitemapNamespace);
+            writer.WriteElementString("loc", _sitemapNamespace, location);
 
             string? lastModified = entry.Metadata.LastModified ?? entry.SourceLastModified;
             if (!string.IsNullOrWhiteSpace(lastModified))
-                writer.WriteElementString("lastmod", lastModified);
+                writer.WriteElementString("lastmod", _sitemapNamespace, lastModified);
 
             string? changeFrequency = entry.Metadata.ChangeFrequency ?? defaultChangeFrequency;
             if (!string.IsNullOrWhiteSpace(changeFrequency))
-                writer.WriteElementString("changefreq", changeFrequency);
+                writer.WriteElementString("changefreq", _sitemapNamespace, changeFrequency);
 
             double? priority = entry.Metadata.Priority ?? defaultPriority;
             if (priority is not null)
-                writer.WriteElementString("priority", priority.Value.ToString("0.0##", CultureInfo.InvariantCulture));
+                writer.WriteElementString("priority", _sitemapNamespace, priority.Value.ToString("0.0##", CultureInfo.InvariantCulture));
 
             writer.WriteEndElement();
         }

@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Soenneker.Gen.Razor.Sitemaps.BuildTasks;
@@ -53,21 +55,28 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
             if (!sitemap.StartsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>", StringComparison.Ordinal))
                 throw new InvalidOperationException("Sitemap was not written as UTF-8 XML.");
 
-            if (!sitemap.Contains("<loc>https://example.com/</loc>", StringComparison.Ordinal))
-                throw new InvalidOperationException("Root route was not generated.");
+            XDocument document = XDocument.Parse(sitemap);
+            string[] locations = document.Descendants()
+                                         .Where(element => element.Name.LocalName == "loc")
+                                         .Select(element => element.Value)
+                                         .ToArray();
 
-            if (!sitemap.Contains("<changefreq>daily</changefreq>", StringComparison.Ordinal) ||
-                !sitemap.Contains("<priority>1.0</priority>", StringComparison.Ordinal) ||
-                !sitemap.Contains("<lastmod>2026-04-28</lastmod>", StringComparison.Ordinal))
+            if (!locations.Contains("https://example.com/", StringComparer.Ordinal))
+                throw new InvalidOperationException($"Root route was not generated. Sitemap:{Environment.NewLine}{sitemap}");
+
+            if (!ContainsElementValue(document, "changefreq", "daily") ||
+                !ContainsElementValue(document, "priority", "1.0") ||
+                !ContainsElementValue(document, "lastmod", "2026-04-28"))
             {
-                throw new InvalidOperationException("Annotated metadata was not generated.");
+                throw new InvalidOperationException($"Annotated metadata was not generated. Sitemap:{Environment.NewLine}{sitemap}");
             }
 
-            if (!sitemap.Contains("<loc>https://example.com/about</loc>", StringComparison.Ordinal))
-                throw new InvalidOperationException("Unannotated page was not generated.");
+            if (!locations.Contains("https://example.com/about", StringComparer.Ordinal))
+                throw new InvalidOperationException($"Unannotated page was not generated. Sitemap:{Environment.NewLine}{sitemap}");
 
-            if (!sitemap.Contains("<loc>https://example.com/search?q=test&amp;page=1</loc>", StringComparison.Ordinal))
-                throw new InvalidOperationException("URL values were not XML escaped.");
+            if (!locations.Contains("https://example.com/search?q=test&page=1", StringComparer.Ordinal) ||
+                !sitemap.Contains("https://example.com/search?q=test&amp;page=1", StringComparison.Ordinal))
+                throw new InvalidOperationException($"URL values were not XML escaped. Sitemap:{Environment.NewLine}{sitemap}");
 
             if (!sitemap.Contains("<lastmod>", StringComparison.Ordinal))
                 throw new InvalidOperationException("File-derived lastmod was not generated.");
@@ -99,5 +108,11 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
         }
 
         throw new DirectoryNotFoundException("Could not locate TestRazorPages fixture directory.");
+    }
+
+    private static bool ContainsElementValue(XContainer document, string localName, string value)
+    {
+        return document.Descendants()
+                       .Any(element => element.Name.LocalName == localName && string.Equals(element.Value, value, StringComparison.Ordinal));
     }
 }
