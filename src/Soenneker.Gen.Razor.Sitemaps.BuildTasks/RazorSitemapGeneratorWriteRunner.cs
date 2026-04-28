@@ -332,7 +332,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
     {
         route = NormalizeUrl(route);
 
-        if (Uri.TryCreate(route, UriKind.Absolute, out Uri? absolute))
+        if (!route.StartsWith("/", StringComparison.Ordinal) && Uri.TryCreate(route, UriKind.Absolute, out Uri? absolute))
             return absolute.ToString();
 
         if (string.IsNullOrWhiteSpace(baseUrl))
