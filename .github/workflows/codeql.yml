@@ -41,6 +41,12 @@ jobs:
           languages: csharp
           build-mode: manual
 
+      - name: Restore build tasks
+        run: dotnet restore ./src/Soenneker.Gen.Razor.Sitemaps.BuildTasks/Soenneker.Gen.Razor.Sitemaps.BuildTasks.csproj --verbosity minimal
+
+      - name: Build build tasks
+        run: dotnet build ./src/Soenneker.Gen.Razor.Sitemaps.BuildTasks/Soenneker.Gen.Razor.Sitemaps.BuildTasks.csproj --configuration Release --no-restore --verbosity minimal
+
       - name: Restore src
         run: dotnet restore ./src/Soenneker.Gen.Razor.Sitemaps/Soenneker.Gen.Razor.Sitemaps.csproj --verbosity minimal
 
