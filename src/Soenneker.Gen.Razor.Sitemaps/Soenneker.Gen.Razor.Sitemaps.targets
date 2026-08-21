@@ -23,8 +23,15 @@
         <_RazorSitemapIncludeUnannotatedPagesArg> --includeUnannotatedPages &quot;$(RazorSitemapIncludeUnannotatedPages)&quot;</_RazorSitemapIncludeUnannotatedPagesArg>
     </PropertyGroup>
 
+    <ItemGroup>
+        <_RazorSitemapGeneratorInputs Include="$(_RazorSitemapProjectDir)\**\*.razor"
+                                      Exclude="$(_RazorSitemapProjectDir)\bin\**;$(_RazorSitemapProjectDir)\obj\**" />
+    </ItemGroup>
+
     <Target Name="RunRazorSitemapGeneratorBuildTasks"
             AfterTargets="Build"
+            Inputs="@(_RazorSitemapGeneratorInputs);$(TargetPath);$(MSBuildProjectFullPath);$(RazorSitemapBuildTasksDllPath)"
+            Outputs="$(RazorSitemapOutputPath)"
             Condition="'$(DesignTimeBuild)'!='true' and '$(IsCrossTargetingBuild)'!='true' and '$(RazorSitemapEnabled)'=='true'">
 
         <Message Importance="high" Text="Running Soenneker.Gen.Razor.Sitemaps BuildTasks: projectDir=$(_RazorSitemapProjectDir) output=$(RazorSitemapOutputPath)" />
