@@ -52,10 +52,17 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
         try
         {
-            List<SitemapEntry> entries = await DiscoverFromRazorFiles(projectDir, includeUnannotatedPages, cancellationToken);
-
-            if (!string.IsNullOrWhiteSpace(targetPath) && await _fileUtil.Exists(targetPath, cancellationToken))
-                MergeCompiledMetadata(entries, targetPath);
+            List<SitemapEntry> entries;
+            if (!string.IsNullOrWhiteSpace(targetPath) && await _fileUtil.Exists(targetPath, cancellationToken) &&
+                TryDiscoverFromCompiledAssembly(targetPath, includeUnannotatedPages, out List<SitemapEntry>? compiledEntries))
+            {
+                entries = compiledEntries;
+                await AddSourceLastModified(entries, projectDir, cancellationToken);
+            }
+            else
+            {
+                entries = await DiscoverFromRazorFiles(projectDir, includeUnannotatedPages, cancellationToken);
+            }
 
             entries = entries.Where(entry => !entry.Metadata.Exclude)
                              .GroupBy(entry => NormalizeUrl(entry.Metadata.Url ?? entry.Route), StringComparer.OrdinalIgnoreCase)
@@ -67,8 +74,10 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
                              .OrderBy(entry => entry.Route, StringComparer.OrdinalIgnoreCase)
                              .ToList();
 
-            await WriteSitemap(outputFullPath, baseUrl, entries, defaultChangeFrequency, defaultPriority, cancellationToken);
-            Console.WriteLine($"Generated Razor sitemap with {entries.Count} URLs at {outputFullPath}");
+            bool written = await WriteSitemap(outputFullPath, baseUrl, entries, defaultChangeFrequency, defaultPriority, cancellationToken);
+            Console.WriteLine(written
+                ? $"Generated Razor sitemap with {entries.Count} URLs at {outputFullPath}"
+                : $"Razor sitemap is unchanged with {entries.Count} URLs at {outputFullPath}");
         }
         catch (Exception e)
         {
@@ -193,66 +202,105 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         }
     }
 
-    private static void MergeCompiledMetadata(List<SitemapEntry> entries, string targetPath)
+    private async ValueTask AddSourceLastModified(List<SitemapEntry> entries, string projectDir, CancellationToken cancellationToken)
     {
+        var componentNames = entries.Where(entry => entry.Metadata.LastModified is null)
+                                    .Select(entry => entry.ComponentName)
+                                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (componentNames.Count == 0)
+            return;
+
+        List<string> files = await _directoryUtil.GetFilesByExtension(projectDir, ".razor", recursive: true, cancellationToken);
+        var lastModifiedByComponent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string file in files)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (IsExcludedPath(file))
+                continue;
+
+            string componentName = GetComponentName(projectDir, file);
+            if (!componentNames.Contains(componentName))
+                continue;
+
+            string? lastModified = await GetSourceLastModified(file, cancellationToken);
+            if (lastModified is not null)
+                lastModifiedByComponent[componentName] = lastModified;
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            SitemapEntry entry = entries[i];
+            if (lastModifiedByComponent.TryGetValue(entry.ComponentName, out string? lastModified))
+                entries[i] = entry with { SourceLastModified = lastModified };
+        }
+    }
+
+    private static bool TryDiscoverFromCompiledAssembly(string targetPath, bool includeUnannotatedPages, out List<SitemapEntry> entries)
+    {
+        entries = [];
         AssemblyLoadContext? context = null;
 
         try
         {
             string? targetDir = Path.GetDirectoryName(targetPath);
+            var dependencyResolver = new AssemblyDependencyResolver(targetPath);
             context = new AssemblyLoadContext("SoennekerRazorSitemap", isCollectible: true);
             context.Resolving += (_, assemblyName) =>
             {
-                if (string.IsNullOrWhiteSpace(targetDir))
-                    return null;
+                string? resolvedPath = dependencyResolver.ResolveAssemblyToPath(assemblyName);
+                if (resolvedPath is not null)
+                    return context.LoadFromAssemblyPath(resolvedPath);
 
-                string dependencyPath = Path.Combine(targetDir, assemblyName.Name + ".dll");
-                return new FileInfo(dependencyPath).Exists ? context.LoadFromAssemblyPath(dependencyPath) : null;
+                if (!string.IsNullOrWhiteSpace(targetDir))
+                {
+                    string dependencyPath = Path.Combine(targetDir, assemblyName.Name + ".dll");
+                    if (new FileInfo(dependencyPath).Exists)
+                        return context.LoadFromAssemblyPath(dependencyPath);
+                }
+
+                try
+                {
+                    return AssemblyLoadContext.Default.LoadFromAssemblyName(assemblyName);
+                }
+                catch
+                {
+                    return null;
+                }
             };
 
             Assembly assembly = context.LoadFromAssemblyPath(targetPath);
 
             foreach (Type type in assembly.GetTypes())
             {
-                string[] routes = type.GetCustomAttributesData()
-                                      .Where(attribute => attribute.AttributeType.FullName == "Microsoft.AspNetCore.Components.RouteAttribute")
-                                      .Select(attribute => attribute.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null)
-                                      .Where(route => ShouldIncludeRoute(route, type.Name, SitemapMetadata.Empty))
-                                      .Cast<string>()
-                                      .ToArray();
+                IList<CustomAttributeData> attributes = type.GetCustomAttributesData();
+                SitemapMetadata metadata = ReadSitemapMetadata(attributes);
+                if (!includeUnannotatedPages && !metadata.HasAnyValue)
+                    continue;
+
+                string[] routes = attributes.Where(attribute => attribute.AttributeType.FullName == "Microsoft.AspNetCore.Components.RouteAttribute")
+                                            .Select(attribute => attribute.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null)
+                                            .Where(route => ShouldIncludeRoute(route, type.Name, metadata))
+                                            .Cast<string>()
+                                            .ToArray();
 
                 if (routes.Length == 0)
                     continue;
 
-                SitemapMetadata metadata = ReadSitemapMetadata(type.GetCustomAttributesData());
                 string componentName = type.Name;
 
                 foreach (string route in routes)
-                {
-                    int existingIndex = entries.FindIndex(entry =>
-                        string.Equals(NormalizeUrl(entry.Route), NormalizeUrl(route), StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(entry.ComponentName, componentName, StringComparison.OrdinalIgnoreCase));
-
-                    var compiledEntry = new SitemapEntry(route, metadata, componentName, null);
-                    if (existingIndex >= 0)
-                    {
-                        SitemapEntry existing = entries[existingIndex];
-                        entries[existingIndex] = compiledEntry with
-                        {
-                            Metadata = metadata.HasAnyValue ? metadata : existing.Metadata,
-                            SourceLastModified = existing.SourceLastModified
-                        };
-                    }
-                    else
-                    {
-                        entries.Add(compiledEntry);
-                    }
-                }
+                    entries.Add(new SitemapEntry(route, metadata, componentName, null));
             }
+
+            return true;
         }
         catch
         {
-            // Source-file parsing is the primary path. Reflection is best-effort for code-behind attributes.
+            entries = [];
+            return false;
         }
         finally
         {
@@ -284,7 +332,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         return metadata;
     }
 
-    private async ValueTask WriteSitemap(string outputPath, string baseUrl, IReadOnlyCollection<SitemapEntry> entries, string? defaultChangeFrequency,
+    private async ValueTask<bool> WriteSitemap(string outputPath, string baseUrl, IReadOnlyCollection<SitemapEntry> entries, string? defaultChangeFrequency,
         double? defaultPriority, CancellationToken cancellationToken)
     {
         string? outputDir = Path.GetDirectoryName(outputPath);
@@ -329,7 +377,16 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         writer.WriteEndDocument();
         writer.Flush();
 
-        await _fileUtil.Write(outputPath, stream.ToArray(), log: false, cancellationToken);
+        byte[] content = stream.ToArray();
+        if (await _fileUtil.Exists(outputPath, cancellationToken))
+        {
+            byte[] existingContent = await global::System.IO.File.ReadAllBytesAsync(outputPath, cancellationToken);
+            if (existingContent.AsSpan().SequenceEqual(content))
+                return false;
+        }
+
+        await _fileUtil.Write(outputPath, content, log: false, cancellationToken);
+        return true;
     }
 
     private static string BuildLocation(string baseUrl, string route)

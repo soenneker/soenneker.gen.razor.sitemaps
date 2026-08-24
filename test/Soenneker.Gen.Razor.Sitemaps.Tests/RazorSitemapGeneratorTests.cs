@@ -39,13 +39,14 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
             await directoryUtil.Create(tempDir, log: false, cancellationToken: CancellationToken.None);
 
             var runner = serviceProvider.GetRequiredService<RazorSitemapGeneratorWriteRunner>();
-            int exitCode = await runner.Run(new[]
+            string[] args =
             {
                 "--projectDir", testProjectDir,
                 "--baseUrl", "https://example.com",
                 "--outputPath", outputPath,
                 "--includeUnannotatedPages", "true"
-            }, CancellationToken.None);
+            };
+            int exitCode = await runner.Run(args, CancellationToken.None);
 
             if (exitCode != 0)
                 throw new InvalidOperationException($"Runner exited with {exitCode}");
@@ -87,6 +88,17 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
             if (sitemap.Contains("hidden", StringComparison.OrdinalIgnoreCase) || sitemap.Contains("products", StringComparison.OrdinalIgnoreCase) ||
                 sitemap.Contains("not-found", StringComparison.OrdinalIgnoreCase) || sitemap.Contains("error", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Excluded, default-excluded, or dynamic route was generated.");
+
+            var preservedLastWriteTime = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+            global::System.IO.File.SetLastWriteTimeUtc(outputPath, preservedLastWriteTime);
+
+            exitCode = await runner.Run(args, CancellationToken.None);
+            if (exitCode != 0)
+                throw new InvalidOperationException($"Runner exited with {exitCode} on an unchanged generation.");
+
+            DateTime unchangedLastWriteTime = global::System.IO.File.GetLastWriteTimeUtc(outputPath);
+            if (unchangedLastWriteTime != preservedLastWriteTime)
+                throw new InvalidOperationException("An unchanged sitemap was rewritten.");
         }
         finally
         {
