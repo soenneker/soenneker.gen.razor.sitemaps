@@ -14,7 +14,7 @@
 
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <PackageReference Include="Soenneker.Utils.Directory" Version="4.0.900" />
+        <PackageReference Include="Soenneker.Utils.Directory" Version="4.0.901" />
         <PackageReference Include="Soenneker.Utils.File" Version="4.0.2223" />
     </ItemGroup>
 </Project>
