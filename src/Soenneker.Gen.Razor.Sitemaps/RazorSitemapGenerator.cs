@@ -9,9 +9,9 @@ namespace Soenneker.Gen.Razor.Sitemaps;
 public sealed class RazorSitemapGenerator : IIncrementalGenerator
 {
     /// <summary>
-    /// Executes the initialize operation.
+    /// Initializes the razor sitemap generator so it is ready for use.
     /// </summary>
-    /// <param name="context">The context.</param>
+    /// <param name="context">HTTP context containing the Authorization header.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // Generator runs only on build; no incremental output. BuildTasks handle Razor analysis and sitemap writing.
