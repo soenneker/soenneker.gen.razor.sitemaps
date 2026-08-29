@@ -15,7 +15,7 @@ using Soenneker.Utils.File.Abstract;
 
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 
-///<inheritdoc cref="Abstract.IRazorSitemapGeneratorWriteRunner"/>
+/// <inheritdoc cref="Abstract.IRazorSitemapGeneratorWriteRunner"/>
 public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSitemapGeneratorWriteRunner
 {
     private const string _sitemapAttributeName = "Soenneker.Razor.Sitemap.SitemapAttribute";
