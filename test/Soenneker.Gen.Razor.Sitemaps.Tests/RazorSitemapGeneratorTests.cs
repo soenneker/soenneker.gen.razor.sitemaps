@@ -86,7 +86,8 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
                 throw new InvalidOperationException("Default changefreq or priority was generated.");
 
             if (sitemap.Contains("hidden", StringComparison.OrdinalIgnoreCase) || sitemap.Contains("products", StringComparison.OrdinalIgnoreCase) ||
-                sitemap.Contains("not-found", StringComparison.OrdinalIgnoreCase) || sitemap.Contains("error", StringComparison.OrdinalIgnoreCase))
+                sitemap.Contains("not-found", StringComparison.OrdinalIgnoreCase) || sitemap.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                sitemap.Contains("commented-out", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Excluded, default-excluded, or dynamic route was generated.");
 
             var preservedLastWriteTime = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);

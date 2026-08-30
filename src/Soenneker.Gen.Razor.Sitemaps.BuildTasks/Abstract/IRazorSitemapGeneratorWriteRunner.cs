@@ -4,15 +4,15 @@ using System.Threading.Tasks;
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks.Abstract;
 
 /// <summary>
-/// Defines the razor sitemap generator write runner contract.
+/// Runs the Razor sitemap build task from its command-line arguments.
 /// </summary>
 public interface IRazorSitemapGeneratorWriteRunner
 {
     /// <summary>
-    /// Runs razor sitemap generator write runner for the razor sitemap generator write runner.
+    /// Discovers Razor routes and writes the configured sitemap document.
     /// </summary>
-    /// <param name="args">Command-line arguments passed to the application.</param>
-    /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    /// <returns>A task whose result is the requested value.</returns>
+    /// <param name="args">Generator command-line arguments supplied by the MSBuild target.</param>
+    /// <param name="cancellationToken">Cancels discovery or output.</param>
+    /// <returns>Zero when generation succeeds; otherwise a nonzero process exit code.</returns>
     ValueTask<int> Run(string[] args, CancellationToken cancellationToken);
 }

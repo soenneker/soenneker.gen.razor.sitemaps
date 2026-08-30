@@ -15,7 +15,6 @@ using Soenneker.Utils.File.Abstract;
 
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 
-/// <inheritdoc cref="Abstract.IRazorSitemapGeneratorWriteRunner"/>
 public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSitemapGeneratorWriteRunner
 {
     private const string _sitemapAttributeName = "Soenneker.Razor.Sitemap.SitemapAttribute";
@@ -65,19 +64,23 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
             }
 
             entries = entries.Where(entry => !entry.Metadata.Exclude)
-                             .GroupBy(entry => NormalizeUrl(entry.Metadata.Url ?? entry.Route), StringComparer.OrdinalIgnoreCase)
+                             .GroupBy(entry => NormalizeUrl(entry.Metadata.Url ?? entry.Route), StringComparer.Ordinal)
                              .Select(group =>
                              {
                                  SitemapEntry selected = group.OrderByDescending(entry => entry.Metadata.HasAnyValue).First();
                                  return selected with { Route = NormalizeUrl(selected.Metadata.Url ?? selected.Route) };
                              })
-                             .OrderBy(entry => entry.Route, StringComparer.OrdinalIgnoreCase)
+                             .OrderBy(entry => entry.Route, StringComparer.Ordinal)
                              .ToList();
 
             bool written = await WriteSitemap(outputFullPath, baseUrl, entries, defaultChangeFrequency, defaultPriority, cancellationToken);
             Console.WriteLine(written
                 ? $"Generated Razor sitemap with {entries.Count} URLs at {outputFullPath}"
                 : $"Razor sitemap is unchanged with {entries.Count} URLs at {outputFullPath}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -100,6 +103,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
                 continue;
 
             string content = await _fileUtil.Read(file, log: false, cancellationToken);
+            content = RazorCommentRegex().Replace(content, string.Empty);
             MatchCollection routeMatches = PageRegex().Matches(content);
             if (routeMatches.Count == 0)
                 continue;
@@ -360,15 +364,26 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
             string? lastModified = entry.Metadata.LastModified ?? entry.SourceLastModified;
             if (!string.IsNullOrWhiteSpace(lastModified))
+            {
+                if (!IsValidLastModified(lastModified))
+                    throw new InvalidOperationException($"Invalid sitemap last-modified value '{lastModified}' for '{entry.Route}'.");
                 writer.WriteElementString("lastmod", _sitemapNamespace, lastModified);
+            }
 
             string? changeFrequency = entry.Metadata.ChangeFrequency ?? defaultChangeFrequency;
             if (!string.IsNullOrWhiteSpace(changeFrequency))
-                writer.WriteElementString("changefreq", _sitemapNamespace, changeFrequency);
+            {
+                string normalizedChangeFrequency = NormalizeChangeFrequency(changeFrequency, entry.Route);
+                writer.WriteElementString("changefreq", _sitemapNamespace, normalizedChangeFrequency);
+            }
 
             double? priority = entry.Metadata.Priority ?? defaultPriority;
             if (priority is not null)
+            {
+                if (!double.IsFinite(priority.Value) || priority.Value is < 0 or > 1)
+                    throw new InvalidOperationException($"Sitemap priority for '{entry.Route}' must be between 0 and 1.");
                 writer.WriteElementString("priority", _sitemapNamespace, priority.Value.ToString("0.0##", CultureInfo.InvariantCulture));
+            }
 
             writer.WriteEndElement();
         }
@@ -385,7 +400,17 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
                 return false;
         }
 
-        await _fileUtil.Write(outputPath, content, log: false, cancellationToken);
+        string temporaryPath = Path.Combine(outputDir!, $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await global::System.IO.File.WriteAllBytesAsync(temporaryPath, content, cancellationToken);
+            global::System.IO.File.Move(temporaryPath, outputPath, true);
+        }
+        finally
+        {
+            global::System.IO.File.Delete(temporaryPath);
+        }
+
         return true;
     }
 
@@ -394,12 +419,37 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         route = NormalizeUrl(route);
 
         if (!route.StartsWith("/", StringComparison.Ordinal) && Uri.TryCreate(route, UriKind.Absolute, out Uri? absolute))
-            return absolute.ToString();
+            return ValidateSitemapUri(absolute, route);
 
         if (string.IsNullOrWhiteSpace(baseUrl))
-            return route;
+            throw new InvalidOperationException($"RazorSitemapBaseUrl is required for relative route '{route}'.");
 
-        return baseUrl.TrimEnd('/') + "/" + route.TrimStart('/');
+        string combined = baseUrl.TrimEnd('/') + "/" + route.TrimStart('/');
+        if (!Uri.TryCreate(combined, UriKind.Absolute, out Uri? combinedUri))
+            throw new InvalidOperationException($"RazorSitemapBaseUrl '{baseUrl}' does not form a valid absolute URL.");
+
+        return ValidateSitemapUri(combinedUri, combined);
+    }
+
+    private static string ValidateSitemapUri(Uri uri, string value)
+    {
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException($"Sitemap URL '{value}' must use HTTP or HTTPS.");
+
+        return uri.AbsoluteUri;
+    }
+
+    private static string NormalizeChangeFrequency(string value, string route)
+    {
+        string normalized = value.Trim().ToLowerInvariant();
+        return normalized is "always" or "hourly" or "daily" or "weekly" or "monthly" or "yearly" or "never"
+            ? normalized
+            : throw new InvalidOperationException($"Invalid sitemap change frequency '{value}' for '{route}'.");
+    }
+
+    private static bool IsValidLastModified(string value)
+    {
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _);
     }
 
     private static string NormalizeUrl(string url)
@@ -527,4 +577,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
     [GeneratedRegex(@"^\s*@attribute\s+\[(?<attribute>[^\]]*Sitemap(?:Attribute)?[^\]]*)\]", RegexOptions.Multiline)]
     private static partial Regex SitemapAttributeRegex();
+
+    [GeneratedRegex(@"@\*.*?\*@", RegexOptions.Singleline)]
+    private static partial Regex RazorCommentRegex();
 }

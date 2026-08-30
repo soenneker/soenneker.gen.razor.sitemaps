@@ -1,10 +1,11 @@
 [![](https://img.shields.io/nuget/v/soenneker.gen.razor.sitemaps.svg?style=for-the-badge)](https://www.nuget.org/packages/soenneker.gen.razor.sitemaps/)
 [![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.gen.razor.sitemaps/publish-package.yml?style=for-the-badge)](https://github.com/soenneker/soenneker.gen.razor.sitemaps/actions/workflows/publish-package.yml)
 [![](https://img.shields.io/nuget/dt/soenneker.gen.razor.sitemaps.svg?style=for-the-badge)](https://www.nuget.org/packages/soenneker.gen.razor.sitemaps/)
+[![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.gen.razor.sitemaps/codeql.yml?label=CodeQL&style=for-the-badge)](https://github.com/soenneker/soenneker.gen.razor.sitemaps/actions/workflows/codeql.yml)
 
 # Soenneker.Gen.Razor.Sitemaps
 
-Defines the razor sitemap generator write runner contract.
+Build-time sitemap generation for Razor and Blazor applications. It discovers component routes, applies optional per-component metadata, and writes a deterministic XML sitemap after the application builds.
 
 ## Install
 
@@ -12,42 +13,65 @@ Defines the razor sitemap generator write runner contract.
 dotnet add package Soenneker.Gen.Razor.Sitemaps
 ```
 
-## Quick start
+## Configure the project
 
-```csharp
-using Soenneker.Gen.Razor.Sitemaps.BuildTasks.Abstract;
+Generation is opt-in. Set an absolute public base URL because sitemap locations must be absolute HTTP or HTTPS URLs:
 
-IRazorSitemapGeneratorWriteRunner razorSitemapGeneratorWriteRunner = /* resolve from DI */;
-var result = await razorSitemapGeneratorWriteRunner.Run("value", default);
+```xml
+<PropertyGroup>
+  <RazorSitemapEnabled>true</RazorSitemapEnabled>
+  <RazorSitemapBaseUrl>https://www.example.com</RazorSitemapBaseUrl>
+  <RazorSitemapOutputPath>wwwroot/sitemap.xml</RazorSitemapOutputPath>
+  <RazorSitemapIncludeUnannotatedPages>true</RazorSitemapIncludeUnannotatedPages>
+</PropertyGroup>
 ```
 
-Runs razor sitemap generator write runner for the razor sitemap generator write runner.
+`RazorSitemapOutputPath` may be absolute or relative to the consuming project. Optional defaults can be supplied with `RazorSitemapDefaultChangeFrequency` and `RazorSitemapDefaultPriority`.
 
-## What you get
+No service registration or runtime call is required. The package runs from its MSBuild target after a successful application build.
 
-- `IRazorSitemapGeneratorWriteRunner` — Defines the razor sitemap generator write runner contract.
-- `Startup` — Represents the startup.
-- `BuildTasksCommandLineArgs` — Represents the build tasks command line args.
-- `ConsoleHostedService` — Represents the console hosted service.
-- `Program` — Represents the program.
-- `RazorSitemapGenerator` — Represents the razor sitemap generator.
-- `SitemapAttribute` — Represents the sitemap attribute.
+## Add route metadata
 
-## API at a glance
+The package makes `Soenneker.Razor.Sitemap.SitemapAttribute` available to the consuming project. Apply it to a routable component with Razor's `@attribute` directive:
 
-| API | What it does | Result / important behavior |
-| --- | --- | --- |
-| `BuildTasksCommandLineArgs.Args` | Gets args. | Gets args. |
-| `ConsoleHostedService.StartAsync(cancellationToken)` | Starts the console hosted service and begins its background work. | A task that completes after the console hosted service has started. |
-| `ConsoleHostedService.StopAsync(cancellationToken)` | Stops the console hosted service and waits for its background work to finish. | A task that completes after the console hosted service has stopped. |
-| `Program.Main(args)` | Runs the application using the supplied command-line arguments. | A task that completes when the application exits. |
-| `RazorSitemapGenerator.Initialize(context)` | Initializes the razor sitemap generator so it is ready for use. | Returns no value; the requested change is complete when the method returns. |
-| `SitemapAttribute.Exclude` | Gets or sets a value indicating whether exclude. | Gets or sets a value indicating whether exclude. |
-| `SitemapAttribute.Url` | Gets or sets url. | Gets or sets url. |
-| `SitemapAttribute.ChangeFrequency` | Gets or sets change frequency. | Gets or sets change frequency. |
-| `SitemapAttribute.Priority` | Gets or sets priority. | Gets or sets priority. |
-| `SitemapAttribute.LastModified` | Gets or sets last modified. | Gets or sets last modified. |
+```razor
+@page "/about"
+@using Soenneker.Razor.Sitemap
+@attribute [Sitemap(ChangeFrequency = "monthly", Priority = 0.7)]
 
-## Practical notes
+<PageTitle>About</PageTitle>
+```
 
-- Cancellation stops pending work; it does not undo work that has already completed.
+Available metadata:
+
+- `Exclude = true` omits every route declared by that component.
+- `Url` replaces the declared route with a static relative or absolute URL. This is how a dynamic route can be represented by a crawlable URL.
+- `ChangeFrequency` accepts `always`, `hourly`, `daily`, `weekly`, `monthly`, `yearly`, or `never`.
+- `Priority` accepts a value from `0` through `1`.
+- `LastModified` accepts a W3C date or date-time. When omitted, the component file's UTC modification date is used.
+
+For example, exclude a private page:
+
+```razor
+@page "/preview"
+@using Soenneker.Razor.Sitemap
+@attribute [Sitemap(Exclude = true)]
+```
+
+Or give a parameterized component a concrete canonical URL:
+
+```razor
+@page "/products/{id:int}"
+@using Soenneker.Razor.Sitemap
+@attribute [Sitemap(Url = "/products/featured")]
+```
+
+## Discovery behavior
+
+- Unannotated pages are included by default. Set `RazorSitemapIncludeUnannotatedPages=false` to require `[Sitemap]` metadata.
+- Parameterized and catch-all routes are omitted unless `Url` supplies a static replacement.
+- Components and routes conventionally used for errors, not-found pages, layouts, hosts, and imports are excluded unless explicitly annotated.
+- `bin`, `obj`, `node_modules`, and `.git` content is ignored, as are directives inside Razor comments.
+- Exact duplicate URLs are collapsed. Case-distinct URLs remain distinct and output is sorted ordinally.
+- XML values are escaped, UTF-8 is written without a byte-order mark, and an unchanged sitemap is not rewritten.
+- A completed temporary file replaces the prior sitemap, so cancellation or a write failure does not truncate valid output. Invalid URLs or metadata fail the build instead of producing a malformed sitemap.
