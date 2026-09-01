@@ -64,6 +64,7 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" PrivateAssets="all" />
+        <PackageReference Include="Soenneker.Utils.PooledStringBuilders" Version="4.0.29" />
     </ItemGroup>
 
     <!-- When consumed via ProjectReference, BuildTasks must exist so RunRazorSitemapGeneratorBuildTasks can run. -->

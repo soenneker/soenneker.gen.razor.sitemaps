@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Soenneker.Gen.Razor.Sitemaps.BuildTasks.Abstract;
 using Soenneker.Utils.Directory.Registrars;
 using Soenneker.Utils.File.Registrars;
+using Soenneker.Utils.MemoryStream.Registrars;
 
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 
@@ -16,7 +17,10 @@ public static class Startup
     /// <param name="services">The service collection.</param>
     public static void ConfigureServices(IServiceCollection services)
     {
-        services.AddFileUtilAsSingleton().AddDirectoryUtilAsSingleton().AddSingleton<IRazorSitemapGeneratorWriteRunner, RazorSitemapGeneratorWriteRunner>();
+        services.AddFileUtilAsSingleton()
+                .AddDirectoryUtilAsSingleton()
+                .AddMemoryStreamUtilAsSingleton()
+                .AddSingleton<IRazorSitemapGeneratorWriteRunner, RazorSitemapGeneratorWriteRunner>();
         services.AddHostedService<ConsoleHostedService>();
     }
 }

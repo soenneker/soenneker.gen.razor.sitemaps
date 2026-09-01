@@ -6,12 +6,14 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
+using Soenneker.Utils.PooledStringBuilders;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using Soenneker.Utils.Directory.Abstract;
 using Soenneker.Utils.File.Abstract;
+using Soenneker.Utils.MemoryStream.Abstract;
 
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 
@@ -22,11 +24,13 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
     private readonly IFileUtil _fileUtil;
     private readonly IDirectoryUtil _directoryUtil;
+    private readonly IMemoryStreamUtil _memoryStreamUtil;
 
-    public RazorSitemapGeneratorWriteRunner(IFileUtil fileUtil, IDirectoryUtil directoryUtil)
+    public RazorSitemapGeneratorWriteRunner(IFileUtil fileUtil, IDirectoryUtil directoryUtil, IMemoryStreamUtil memoryStreamUtil)
     {
         _fileUtil = fileUtil;
         _directoryUtil = directoryUtil;
+        _memoryStreamUtil = memoryStreamUtil;
     }
 
     public async ValueTask<int> Run(string[] args, CancellationToken cancellationToken)
@@ -177,27 +181,34 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
     private static IEnumerable<string> SplitAttributeArguments(string arguments)
     {
         var result = new List<string>();
-        var builder = new StringBuilder();
-        bool inString = false;
-
-        foreach (char c in arguments)
+        var builder = new PooledStringBuilder();
+        try
         {
-            if (c == '"')
-                inString = !inString;
+            bool inString = false;
 
-            if (c == ',' && !inString)
+            foreach (char c in arguments)
             {
-                AddCurrent();
-                continue;
+                if (c == '"')
+                    inString = !inString;
+
+                if (c == ',' && !inString)
+                {
+                    AddCurrent(ref builder, result);
+                    continue;
+                }
+
+                builder.Append(c);
             }
 
-            builder.Append(c);
+            AddCurrent(ref builder, result);
+            return result;
+        }
+        finally
+        {
+            builder.Dispose();
         }
 
-        AddCurrent();
-        return result;
-
-        void AddCurrent()
+        static void AddCurrent(ref PooledStringBuilder builder, List<string> result)
         {
             string value = builder.ToString().Trim();
             if (value.Length > 0)
@@ -350,7 +361,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
             Indent = true
         };
 
-        using var stream = new MemoryStream();
+        using MemoryStream stream = await _memoryStreamUtil.Get(cancellationToken);
         using XmlWriter writer = XmlWriter.Create(stream, settings);
         writer.WriteStartDocument();
         writer.WriteStartElement("urlset", _sitemapNamespace);
