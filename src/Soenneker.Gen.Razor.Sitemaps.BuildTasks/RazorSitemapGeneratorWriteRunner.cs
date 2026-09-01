@@ -395,21 +395,12 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         byte[] content = stream.ToArray();
         if (await _fileUtil.Exists(outputPath, cancellationToken))
         {
-            byte[] existingContent = await global::System.IO.File.ReadAllBytesAsync(outputPath, cancellationToken);
+            byte[] existingContent = await _fileUtil.ReadToBytes(outputPath, log: false, cancellationToken);
             if (existingContent.AsSpan().SequenceEqual(content))
                 return false;
         }
 
-        string temporaryPath = Path.Combine(outputDir!, $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
-        try
-        {
-            await global::System.IO.File.WriteAllBytesAsync(temporaryPath, content, cancellationToken);
-            global::System.IO.File.Move(temporaryPath, outputPath, true);
-        }
-        finally
-        {
-            global::System.IO.File.Delete(temporaryPath);
-        }
+        await _fileUtil.WriteAtomically(outputPath, content, log: false, cancellationToken);
 
         return true;
     }
