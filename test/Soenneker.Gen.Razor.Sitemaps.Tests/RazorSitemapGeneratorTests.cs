@@ -18,7 +18,7 @@ namespace Soenneker.Gen.Razor.Sitemaps.Tests;
 public sealed class RazorSitemapGeneratorTests : UnitTest
 {
     [Test]
-    public async ValueTask Generates_sitemap_from_razor_pages()
+    public async ValueTask Generates_sitemap_from_razor_pages(CancellationToken cancellationToken)
     {
         string tempDir = Path.Combine(Path.GetTempPath(), "soenneker-razor-sitemap-" + Guid.NewGuid().ToString("N"));
         string outputPath = Path.Combine(tempDir, "sitemap.xml");
@@ -46,7 +46,7 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
                 "--outputPath", outputPath,
                 "--includeUnannotatedPages", "true"
             };
-            int exitCode = await runner.Run(args, CancellationToken.None);
+            int exitCode = await runner.Run(args, cancellationToken);
 
             if (exitCode != 0)
                 throw new InvalidOperationException($"Runner exited with {exitCode}");
@@ -93,7 +93,7 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
             var preservedLastWriteTime = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
             global::System.IO.File.SetLastWriteTimeUtc(outputPath, preservedLastWriteTime);
 
-            exitCode = await runner.Run(args, CancellationToken.None);
+            exitCode = await runner.Run(args, cancellationToken);
             if (exitCode != 0)
                 throw new InvalidOperationException($"Runner exited with {exitCode} on an unchanged generation.");
 
