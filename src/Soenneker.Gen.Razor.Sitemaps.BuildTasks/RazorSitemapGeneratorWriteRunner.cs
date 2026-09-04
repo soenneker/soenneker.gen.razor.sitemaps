@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
-using Soenneker.Utils.PooledStringBuilders;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -181,34 +180,27 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
     private static IEnumerable<string> SplitAttributeArguments(string arguments)
     {
         var result = new List<string>();
-        var builder = new PooledStringBuilder();
-        try
+        var builder = new StringBuilder();
+        bool inString = false;
+
+        foreach (char c in arguments)
         {
-            bool inString = false;
+            if (c == '"')
+                inString = !inString;
 
-            foreach (char c in arguments)
+            if (c == ',' && !inString)
             {
-                if (c == '"')
-                    inString = !inString;
-
-                if (c == ',' && !inString)
-                {
-                    AddCurrent(ref builder, result);
-                    continue;
-                }
-
-                builder.Append(c);
+                AddCurrent(builder, result);
+                continue;
             }
 
-            AddCurrent(ref builder, result);
-            return result;
-        }
-        finally
-        {
-            builder.Dispose();
+            builder.Append(c);
         }
 
-        static void AddCurrent(ref PooledStringBuilder builder, List<string> result)
+        AddCurrent(builder, result);
+        return result;
+
+        static void AddCurrent(StringBuilder builder, List<string> result)
         {
             string value = builder.ToString().Trim();
             if (value.Length > 0)
