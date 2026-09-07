@@ -491,20 +491,17 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
     private static bool IsExcludedPath(string path)
     {
-        string normalized = path.Replace('\\', '/');
-
-        return IsPathSegmentExcluded(normalized, "obj") ||
-               IsPathSegmentExcluded(normalized, "bin") ||
-               IsPathSegmentExcluded(normalized, "node_modules") ||
-               IsPathSegmentExcluded(normalized, ".git");
-    }
-
-    private static bool IsPathSegmentExcluded(string path, string segment)
-    {
-        return path.Equals(segment, StringComparison.OrdinalIgnoreCase) ||
-               path.StartsWith(segment + "/", StringComparison.OrdinalIgnoreCase) ||
-               path.EndsWith("/" + segment, StringComparison.OrdinalIgnoreCase) ||
-               path.Contains("/" + segment + "/", StringComparison.OrdinalIgnoreCase);
+        ReadOnlySpan<char> remaining = path.AsSpan();
+        foreach (Range range in remaining.SplitAny("/\\"))
+        {
+            ReadOnlySpan<char> segment = remaining[range];
+            if (segment.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("node_modules", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals(".git", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static string GetComponentName(string projectDir, string file)
