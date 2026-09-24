@@ -15,7 +15,7 @@
     <ItemGroup>
         <!-- Required when reflecting over compiled Blazor components from the shared framework. -->
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <PackageReference Include="Soenneker.Utils.Directory" Version="4.0.944" />
+        <PackageReference Include="Soenneker.Utils.Directory" Version="4.0.945" />
         <PackageReference Include="Soenneker.Utils.File" Version="4.0.2280" />
     </ItemGroup>
 </Project>
