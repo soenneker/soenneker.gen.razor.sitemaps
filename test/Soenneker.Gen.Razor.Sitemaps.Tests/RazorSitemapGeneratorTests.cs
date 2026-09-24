@@ -91,13 +91,13 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
                 throw new InvalidOperationException("Excluded, default-excluded, or dynamic route was generated.");
 
             var preservedLastWriteTime = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
-            global::System.IO.File.SetLastWriteTimeUtc(outputPath, preservedLastWriteTime);
+            await fileUtil.SetLastWriteTimeUtc(outputPath, preservedLastWriteTime);
 
             exitCode = await runner.Run(args, cancellationToken);
             if (exitCode != 0)
                 throw new InvalidOperationException($"Runner exited with {exitCode} on an unchanged generation.");
 
-            DateTime unchangedLastWriteTime = global::System.IO.File.GetLastWriteTimeUtc(outputPath);
+            DateTime unchangedLastWriteTime = (await fileUtil.GetLastModified(outputPath))!.Value.UtcDateTime;
             if (unchangedLastWriteTime != preservedLastWriteTime)
                 throw new InvalidOperationException("An unchanged sitemap was rewritten.");
         }

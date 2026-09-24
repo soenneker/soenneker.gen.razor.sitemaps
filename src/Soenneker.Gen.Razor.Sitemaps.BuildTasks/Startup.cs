@@ -21,6 +21,5 @@ public static class Startup
                 .AddDirectoryUtilAsSingleton()
                 .AddMemoryStreamUtilAsSingleton()
                 .AddSingleton<IRazorSitemapGeneratorWriteRunner, RazorSitemapGeneratorWriteRunner>();
-        services.AddHostedService<ConsoleHostedService>();
     }
 }
