@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.Loader;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -16,7 +16,6 @@ using Soenneker.Utils.MemoryStream.Abstract;
 
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 
-/// <inheritdoc cref="Abstract.IRazorSitemapGeneratorWriteRunner" />
 public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSitemapGeneratorWriteRunner
 {
     private const string _sitemapAttributeName = "Soenneker.Razor.Sitemap.SitemapAttribute";
@@ -182,7 +181,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
     {
         var result = new List<string>();
         var builder = new StringBuilder();
-        bool inString = false;
+        var inString = false;
 
         foreach (char c in arguments)
         {
@@ -249,58 +248,44 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
     private static bool TryDiscoverFromCompiledAssembly(string targetPath, bool includeUnannotatedPages, out List<SitemapEntry> entries)
     {
         entries = [];
-        AssemblyLoadContext? context = null;
-
         try
         {
-            string? targetDir = Path.GetDirectoryName(targetPath);
-            var dependencyResolver = new AssemblyDependencyResolver(targetPath);
-            context = new AssemblyLoadContext("SoennekerRazorSitemap", isCollectible: true);
-            context.Resolving += (_, assemblyName) =>
+            using FileStream stream = File.OpenRead(targetPath);
+            using var pe = new PEReader(stream);
+            MetadataReader reader = pe.GetMetadataReader();
+
+            foreach (TypeDefinitionHandle handle in reader.TypeDefinitions)
             {
-                string? resolvedPath = dependencyResolver.ResolveAssemblyToPath(assemblyName);
-                if (resolvedPath is not null)
-                    return context.LoadFromAssemblyPath(resolvedPath);
+                TypeDefinition type = reader.GetTypeDefinition(handle);
+                string componentName = reader.GetString(type.Name);
+                var routes = new List<string>();
+                var metadata = SitemapMetadata.Empty;
 
-                if (!string.IsNullOrWhiteSpace(targetDir))
+                foreach (CustomAttributeHandle attributeHandle in type.GetCustomAttributes())
                 {
-                    string dependencyPath = Path.Combine(targetDir, assemblyName.Name + ".dll");
-                    if (new FileInfo(dependencyPath).Exists)
-                        return context.LoadFromAssemblyPath(dependencyPath);
+                    CustomAttribute attribute = reader.GetCustomAttribute(attributeHandle);
+                    string? name = GetAttributeTypeName(reader, attribute);
+                    if (name != _sitemapAttributeName && name != "Microsoft.AspNetCore.Components.RouteAttribute")
+                        continue;
+
+                    BlobReader blob = reader.GetBlobReader(attribute.Value);
+                    if (blob.ReadUInt16() != 1)
+                        throw new BadImageFormatException("Invalid custom attribute prolog.");
+
+                    if (name == _sitemapAttributeName)
+                        metadata = ReadSitemapMetadata(ref blob);
+                    else if (blob.ReadSerializedString() is { } route)
+                        routes.Add(route);
                 }
 
-                try
-                {
-                    return AssemblyLoadContext.Default.LoadFromAssemblyName(assemblyName);
-                }
-                catch
-                {
-                    return null;
-                }
-            };
-
-            Assembly assembly = context.LoadFromAssemblyPath(targetPath);
-
-            foreach (Type type in assembly.GetTypes())
-            {
-                IList<CustomAttributeData> attributes = type.GetCustomAttributesData();
-                SitemapMetadata metadata = ReadSitemapMetadata(attributes);
                 if (!includeUnannotatedPages && !metadata.HasAnyValue)
                     continue;
 
-                string[] routes = attributes.Where(attribute => attribute.AttributeType.FullName == "Microsoft.AspNetCore.Components.RouteAttribute")
-                                            .Select(attribute => attribute.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null)
-                                            .Where(route => ShouldIncludeRoute(route, type.Name, metadata))
-                                            .Cast<string>()
-                                            .ToArray();
-
-                if (routes.Length == 0)
-                    continue;
-
-                string componentName = type.Name;
-
                 foreach (string route in routes)
-                    entries.Add(new SitemapEntry(route, metadata, componentName, null));
+                {
+                    if (ShouldIncludeRoute(route, componentName, metadata))
+                        entries.Add(new SitemapEntry(route, metadata, componentName, null));
+                }
             }
 
             return true;
@@ -310,31 +295,62 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
             entries = [];
             return false;
         }
-        finally
-        {
-            context?.Unload();
-        }
     }
 
-    private static SitemapMetadata ReadSitemapMetadata(IList<CustomAttributeData> attributes)
+    private static string? GetAttributeTypeName(MetadataReader reader, CustomAttribute attribute)
     {
-        CustomAttributeData? attribute = attributes.FirstOrDefault(a => a.AttributeType.FullName == _sitemapAttributeName);
-        if (attribute is null)
-            return SitemapMetadata.Empty;
-
-        var metadata = new SitemapMetadata();
-        foreach (CustomAttributeNamedArgument argument in attribute.NamedArguments)
+        EntityHandle typeHandle = attribute.Constructor.Kind switch
         {
-            if (argument.MemberName == "Exclude")
-                metadata.Exclude = argument.TypedValue.Value is true;
-            else if (argument.MemberName == "Url")
-                metadata.Url = argument.TypedValue.Value as string;
-            else if (argument.MemberName == "ChangeFrequency")
-                metadata.ChangeFrequency = argument.TypedValue.Value as string;
-            else if (argument.MemberName == "Priority" && argument.TypedValue.Value is double value && !double.IsNaN(value))
-                metadata.Priority = value;
-            else if (argument.MemberName == "LastModified")
-                metadata.LastModified = argument.TypedValue.Value as string;
+            HandleKind.MemberReference => reader.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent,
+            HandleKind.MethodDefinition => reader.GetMethodDefinition((MethodDefinitionHandle)attribute.Constructor).GetDeclaringType(),
+            _ => default
+        };
+
+        if (typeHandle.Kind == HandleKind.TypeReference)
+        {
+            TypeReference type = reader.GetTypeReference((TypeReferenceHandle)typeHandle);
+            return reader.GetString(type.Namespace) + "." + reader.GetString(type.Name);
+        }
+
+        if (typeHandle.Kind == HandleKind.TypeDefinition)
+        {
+            TypeDefinition type = reader.GetTypeDefinition((TypeDefinitionHandle)typeHandle);
+            return reader.GetString(type.Namespace) + "." + reader.GetString(type.Name);
+        }
+
+        return null;
+    }
+
+    private static SitemapMetadata ReadSitemapMetadata(ref BlobReader blob)
+    {
+        // SitemapAttribute has no constructor parameters. Its named values use
+        // ECMA-335 custom attribute serialization, independent of loaded CLR types.
+        var metadata = new SitemapMetadata();
+        int count = blob.ReadUInt16();
+        for (var i = 0; i < count; i++)
+        {
+            byte kind = blob.ReadByte();
+            if (kind is not (0x53 or 0x54))
+                throw new BadImageFormatException("Invalid custom attribute member kind.");
+
+            byte type = blob.ReadByte();
+            string? name = blob.ReadSerializedString();
+            object? value = type switch
+            {
+                0x02 => blob.ReadBoolean(),
+                0x0d => blob.ReadDouble(),
+                0x0e => blob.ReadSerializedString(),
+                _ => throw new BadImageFormatException("Unsupported sitemap attribute value type.")
+            };
+
+            switch (name)
+            {
+                case "Exclude": metadata.Exclude = value is true; break;
+                case "Url": metadata.Url = value as string; break;
+                case "ChangeFrequency": metadata.ChangeFrequency = value as string; break;
+                case "Priority" when value is double priority && !double.IsNaN(priority): metadata.Priority = priority; break;
+                case "LastModified": metadata.LastModified = value as string; break;
+            }
         }
 
         return metadata;
@@ -349,14 +365,14 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
 
         var settings = new XmlWriterSettings
         {
-            Async = false,
+            Async = true,
             Encoding = new UTF8Encoding(false),
             Indent = true
         };
 
         using MemoryStream stream = await _memoryStreamUtil.Get(cancellationToken);
-        using XmlWriter writer = XmlWriter.Create(stream, settings);
-        writer.WriteStartDocument();
+        await using var writer = XmlWriter.Create(stream, settings);
+        await writer.WriteStartDocumentAsync();
         writer.WriteStartElement("urlset", _sitemapNamespace);
 
         foreach (SitemapEntry entry in entries)
@@ -389,12 +405,12 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
                 writer.WriteElementString("priority", _sitemapNamespace, priority.Value.ToString("0.0##", CultureInfo.InvariantCulture));
             }
 
-            writer.WriteEndElement();
+            await writer.WriteEndElementAsync();
         }
 
-        writer.WriteEndElement();
-        writer.WriteEndDocument();
-        writer.Flush();
+        await writer.WriteEndElementAsync();
+        await writer.WriteEndDocumentAsync();
+        await writer.FlushAsync();
 
         byte[] content = stream.ToArray();
         if (await _fileUtil.Exists(outputPath, cancellationToken))

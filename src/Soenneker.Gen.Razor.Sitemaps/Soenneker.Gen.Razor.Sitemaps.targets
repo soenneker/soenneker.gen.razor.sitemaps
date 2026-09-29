@@ -5,12 +5,14 @@
     </Target>
 
     <PropertyGroup>
-        <_RazorSitemapBuildTasksDllFromPackage>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll'))</_RazorSitemapBuildTasksDllFromPackage>
-        <_RazorSitemapBuildTasksDllFromBuildTransitive>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', 'buildTransitive', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll'))))</_RazorSitemapBuildTasksDllFromBuildTransitive>
-        <_RazorSitemapBuildTasksDllFromProject>$([System.IO.Path]::GetFullPath($([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks', 'bin', '$(Configuration)', 'Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll'))))</_RazorSitemapBuildTasksDllFromProject>
-        <RazorSitemapBuildTasksDllPath Condition="'$(RazorSitemapBuildTasksDllPath)'=='' and Exists('$(_RazorSitemapBuildTasksDllFromPackage)')">$(_RazorSitemapBuildTasksDllFromPackage)</RazorSitemapBuildTasksDllPath>
-        <RazorSitemapBuildTasksDllPath Condition="'$(RazorSitemapBuildTasksDllPath)'=='' and Exists('$(_RazorSitemapBuildTasksDllFromBuildTransitive)')">$(_RazorSitemapBuildTasksDllFromBuildTransitive)</RazorSitemapBuildTasksDllPath>
-        <RazorSitemapBuildTasksDllPath Condition="'$(RazorSitemapBuildTasksDllPath)'=='' and Exists('$(_RazorSitemapBuildTasksDllFromProject)')">$(_RazorSitemapBuildTasksDllFromProject)</RazorSitemapBuildTasksDllPath>
+        <!-- Select the SDK host, never the application RuntimeIdentifier (for example browser-wasm). -->
+        <RazorSitemapToolRuntimeIdentifier Condition="'$(RazorSitemapToolRuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RazorSitemapToolRuntimeIdentifier>
+        <_RazorSitemapExecutableName>Soenneker.Gen.Razor.Sitemaps.BuildTasks</_RazorSitemapExecutableName>
+        <_RazorSitemapExecutableName Condition="$([System.String]::Copy('$(RazorSitemapToolRuntimeIdentifier)').StartsWith('win-'))">$(_RazorSitemapExecutableName).exe</_RazorSitemapExecutableName>
+        <_RazorSitemapNativePackagePath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/native/$(RazorSitemapToolRuntimeIdentifier)/$(_RazorSitemapExecutableName)'))</_RazorSitemapNativePackagePath>
+        <_RazorSitemapNativeProjectPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../artifacts/native/$(RazorSitemapToolRuntimeIdentifier)/$(_RazorSitemapExecutableName)'))</_RazorSitemapNativeProjectPath>
+        <RazorSitemapBuildTasksExecutablePath Condition="'$(RazorSitemapBuildTasksExecutablePath)' == '' and Exists('$(_RazorSitemapNativePackagePath)')">$(_RazorSitemapNativePackagePath)</RazorSitemapBuildTasksExecutablePath>
+        <RazorSitemapBuildTasksExecutablePath Condition="'$(RazorSitemapBuildTasksExecutablePath)' == ''">$(_RazorSitemapNativeProjectPath)</RazorSitemapBuildTasksExecutablePath>
         <RazorSitemapEnabled Condition="'$(RazorSitemapEnabled)'==''">false</RazorSitemapEnabled>
         <RazorSitemapOutputPath Condition="'$(RazorSitemapOutputPath)'==''">wwwroot/sitemap.xml</RazorSitemapOutputPath>
         <RazorSitemapIncludeUnannotatedPages Condition="'$(RazorSitemapIncludeUnannotatedPages)'==''">true</RazorSitemapIncludeUnannotatedPages>
@@ -30,23 +32,25 @@
 
     <Target Name="RunRazorSitemapGeneratorBuildTasks"
             AfterTargets="Build"
-            Inputs="@(_RazorSitemapGeneratorInputs);$(TargetPath);$(MSBuildProjectFullPath);$(RazorSitemapBuildTasksDllPath)"
+            Inputs="@(_RazorSitemapGeneratorInputs);$(TargetPath);$(MSBuildProjectFullPath);$(RazorSitemapBuildTasksExecutablePath)"
             Outputs="$(RazorSitemapOutputPath)"
             Condition="'$(DesignTimeBuild)'!='true' and '$(IsCrossTargetingBuild)'!='true' and '$(RazorSitemapEnabled)'=='true'">
 
         <Message Importance="high" Text="Running Soenneker.Gen.Razor.Sitemaps BuildTasks: projectDir=$(_RazorSitemapProjectDir) output=$(RazorSitemapOutputPath)" />
         <Error Condition="'$(_RazorSitemapProjectDir)' == ''"
                Text="Soenneker.Gen.Razor.Sitemaps: project directory could not be resolved." />
-        <Error Condition="'$(RazorSitemapBuildTasksDllPath)'==''"
-               Text="RazorSitemapBuildTasksDllPath was not resolved. MSBuildThisFileDirectory=$(MSBuildThisFileDirectory)" />
-        <Error Condition="!Exists('$(RazorSitemapBuildTasksDllPath)')"
-               Text="Razor sitemap BuildTasks DLL not found at '$(RazorSitemapBuildTasksDllPath)'." />
+        <Error Condition="'$(RazorSitemapBuildTasksExecutablePath)'==''"
+               Text="RazorSitemapBuildTasksExecutablePath was not resolved. MSBuildThisFileDirectory=$(MSBuildThisFileDirectory)" />
+        <Error Condition="!Exists('$(RazorSitemapBuildTasksExecutablePath)')"
+               Text="Razor sitemap native BuildTasks executable not found at '$(RazorSitemapBuildTasksExecutablePath)'." />
 
+        <!-- NuGet extraction does not preserve Unix execute permissions. -->
+        <Exec Condition="'$(OS)' != 'Windows_NT'" Command="chmod +x &quot;$(RazorSitemapBuildTasksExecutablePath)&quot;" />
         <Exec WorkingDirectory="$(_RazorSitemapProjectDir)"
               IgnoreExitCode="false"
               ConsoleToMSBuild="true"
               StandardOutputImportance="high"
               StandardErrorImportance="high"
-              Command='dotnet exec &quot;$(RazorSitemapBuildTasksDllPath)&quot; --targetPath &quot;$(TargetPath)&quot; --projectDir &quot;$(_RazorSitemapProjectDir)&quot;$(_RazorSitemapBaseUrlArg)$(_RazorSitemapOutputPathArg)$(_RazorSitemapDefaultChangeFrequencyArg)$(_RazorSitemapDefaultPriorityArg)$(_RazorSitemapIncludeUnannotatedPagesArg)' />
+              Command='&quot;$(RazorSitemapBuildTasksExecutablePath)&quot; --targetPath &quot;$(TargetPath)&quot; --projectDir &quot;$(_RazorSitemapProjectDir)&quot;$(_RazorSitemapBaseUrlArg)$(_RazorSitemapOutputPathArg)$(_RazorSitemapDefaultChangeFrequencyArg)$(_RazorSitemapDefaultPriorityArg)$(_RazorSitemapIncludeUnannotatedPagesArg)' />
     </Target>
 </Project>

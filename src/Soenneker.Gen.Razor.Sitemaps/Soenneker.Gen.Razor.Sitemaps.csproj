@@ -54,7 +54,6 @@
         <None Include="Soenneker.Gen.Razor.Sitemaps.targets" Pack="true" PackagePath="buildTransitive\" />
         <None Include="SitemapAttribute.cs" Pack="true" PackagePath="build\Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" />
         <None Include="SitemapAttribute.cs" Pack="true" PackagePath="buildTransitive\Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" />
-
     </ItemGroup>
 
     <ItemGroup>
@@ -66,22 +65,34 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" PrivateAssets="all" />
     </ItemGroup>
 
-    <!-- When consumed via ProjectReference, BuildTasks must exist so RunRazorSitemapGeneratorBuildTasks can run. -->
-    <Target Name="BuildBuildTasksToolOnBuild" BeforeTargets="Build">
-        <MSBuild Projects="..\Soenneker.Gen.Razor.Sitemaps.BuildTasks\Soenneker.Gen.Razor.Sitemaps.BuildTasks.csproj" Targets="Build" Properties="Configuration=$(Configuration)" RemoveProperties="TargetFramework;TargetFrameworks" BuildInParallel="true" />
+    <PropertyGroup>
+        <SitemapNativeRuntimeIdentifier Condition="'$(SitemapNativeRuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</SitemapNativeRuntimeIdentifier>
+        <SitemapNativeArtifactsDir Condition="'$(SitemapNativeArtifactsDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../artifacts/native'))</SitemapNativeArtifactsDir>
+        <_SitemapNativeExecutable>Soenneker.Gen.Razor.Sitemaps.BuildTasks</_SitemapNativeExecutable>
+        <_SitemapNativeExecutable Condition="$([System.String]::Copy('$(SitemapNativeRuntimeIdentifier)').StartsWith('win-'))">$(_SitemapNativeExecutable).exe</_SitemapNativeExecutable>
+    </PropertyGroup>
+
+    <Target Name="BuildBuildTasksTool" BeforeTargets="Build"
+            Condition="'$(SitemapUsePrebuiltNativeTools)' != 'true'"
+            Inputs="@(SitemapNativeSource);../Soenneker.Gen.Razor.Sitemaps.BuildTasks/obj/project.assets.json"
+            Outputs="$(SitemapNativeArtifactsDir)/$(SitemapNativeRuntimeIdentifier)/$(_SitemapNativeExecutable)">
+        <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)/../Soenneker.Gen.Razor.Sitemaps.BuildTasks/Soenneker.Gen.Razor.Sitemaps.BuildTasks.csproj&quot; --configuration Release --runtime $(SitemapNativeRuntimeIdentifier) --output &quot;$(SitemapNativeArtifactsDir)/$(SitemapNativeRuntimeIdentifier)&quot;" />
     </Target>
 
-    <Target Name="BuildBuildTasksTool" BeforeTargets="Pack" Condition="'$(IsPackable)' == 'true'">
-
-        <MSBuild Projects="..\Soenneker.Gen.Razor.Sitemaps.BuildTasks\Soenneker.Gen.Razor.Sitemaps.BuildTasks.csproj" Targets="Build" Properties="Configuration=$(Configuration);NoBuild=false" RemoveProperties="TargetFramework;TargetFrameworks" BuildInParallel="true" />
-
-        <Error Condition="!Exists('..\Soenneker.Gen.Razor.Sitemaps.BuildTasks\bin\$(Configuration)\Soenneker.Gen.Razor.Sitemaps.BuildTasks.dll')" Text="BuildTasks output missing. Aborting pack to avoid publishing a broken package." />
-
-    </Target>
+    <ItemGroup>
+        <SitemapNativeSource Include="../Soenneker.Gen.Razor.Sitemaps.BuildTasks/**/*.cs;../Soenneker.Gen.Razor.Sitemaps.BuildTasks/*.csproj"
+                             Exclude="../Soenneker.Gen.Razor.Sitemaps.BuildTasks/bin/**;../Soenneker.Gen.Razor.Sitemaps.BuildTasks/obj/**" />
+    </ItemGroup>
 
     <Target Name="AddBuildTasksOutputToPackage" DependsOnTargets="BuildBuildTasksTool">
         <ItemGroup>
-            <TfmSpecificPackageFile Include="..\Soenneker.Gen.Razor.Sitemaps.BuildTasks\bin\$(Configuration)\**\*.*" PackagePath="buildTransitive\%(RecursiveDir)" />
+            <_SitemapRequiredRuntime Include="win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64" Condition="'$(SitemapUsePrebuiltNativeTools)' == 'true'" />
+            <_SitemapNativeFile Include="$(SitemapNativeArtifactsDir)/**/*"
+                                Exclude="$(SitemapNativeArtifactsDir)/**/*.pdb;$(SitemapNativeArtifactsDir)/**/*.dbg;$(SitemapNativeArtifactsDir)/**/*.dSYM/**" />
+            <TfmSpecificPackageFile Include="@(_SitemapNativeFile)" PackagePath="tools/native/" />
         </ItemGroup>
+        <Error Condition="'@(_SitemapRequiredRuntime)' != '' and !Exists('$(SitemapNativeArtifactsDir)/%(_SitemapRequiredRuntime.Identity)/Soenneker.Gen.Razor.Sitemaps.BuildTasks') and !Exists('$(SitemapNativeArtifactsDir)/%(_SitemapRequiredRuntime.Identity)/Soenneker.Gen.Razor.Sitemaps.BuildTasks.exe')"
+               Text="Missing native sitemap tool for %(_SitemapRequiredRuntime.Identity)." />
+        <Error Condition="'@(_SitemapNativeFile)' == ''" Text="Native sitemap tools are missing. Publish BuildTasks before packing." />
     </Target>
 </Project>

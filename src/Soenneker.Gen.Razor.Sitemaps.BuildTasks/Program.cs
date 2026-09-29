@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Soenneker.Extensions.Task;
 
 namespace Soenneker.Gen.Razor.Sitemaps.BuildTasks;
 
@@ -40,7 +41,7 @@ public sealed class Program
         }
         catch (Exception e)
         {
-            await Console.Error.WriteLineAsync($"Stopped program because of exception: {e}");
+            await Console.Error.WriteLineAsync($"Stopped program because of exception: {e}").NoSync();
             Environment.ExitCode = 1;
         }
         finally

@@ -30,8 +30,8 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
             .AddSingleton<RazorSitemapGeneratorWriteRunner>()
             .BuildServiceProvider();
 
-        IFileUtil fileUtil = serviceProvider.GetRequiredService<IFileUtil>();
-        IDirectoryUtil directoryUtil = serviceProvider.GetRequiredService<IDirectoryUtil>();
+        var fileUtil = serviceProvider.GetRequiredService<IFileUtil>();
+        var directoryUtil = serviceProvider.GetRequiredService<IDirectoryUtil>();
         string testProjectDir = await FindTestProjectDir(directoryUtil, CancellationToken.None);
 
         try
