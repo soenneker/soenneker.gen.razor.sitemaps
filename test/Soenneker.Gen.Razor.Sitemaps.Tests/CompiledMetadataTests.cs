@@ -17,7 +17,7 @@ namespace Soenneker.Gen.Razor.Sitemaps.Tests;
 public sealed class CompiledMetadataTests
 {
     [Test]
-    public async Task Reads_compiled_attributes_without_dependencies(CancellationToken cancellationToken)
+    public async ValueTask Reads_compiled_attributes_without_dependencies(CancellationToken cancellationToken)
     {
         string directory = Path.Combine(Path.GetTempPath(), "sitemap-metadata-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
