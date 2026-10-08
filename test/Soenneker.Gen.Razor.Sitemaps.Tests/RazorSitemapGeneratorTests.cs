@@ -32,11 +32,11 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
 
         var fileUtil = serviceProvider.GetRequiredService<IFileUtil>();
         var directoryUtil = serviceProvider.GetRequiredService<IDirectoryUtil>();
-        string testProjectDir = await FindTestProjectDir(directoryUtil, CancellationToken.None);
+        string testProjectDir = await FindTestProjectDir(directoryUtil, cancellationToken);
 
         try
         {
-            await directoryUtil.Create(tempDir, log: false, cancellationToken: CancellationToken.None);
+            await directoryUtil.Create(tempDir, log: false, cancellationToken: cancellationToken);
 
             var runner = serviceProvider.GetRequiredService<RazorSitemapGeneratorWriteRunner>();
             string[] args =
@@ -51,7 +51,7 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
             if (exitCode != 0)
                 throw new InvalidOperationException($"Runner exited with {exitCode}");
 
-            string sitemap = await fileUtil.Read(outputPath, log: false, cancellationToken: CancellationToken.None);
+            string sitemap = await fileUtil.Read(outputPath, log: false, cancellationToken: cancellationToken);
 
             if (!sitemap.StartsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>", StringComparison.Ordinal))
                 throw new InvalidOperationException("Sitemap was not written as UTF-8 XML.");
@@ -91,13 +91,13 @@ public sealed class RazorSitemapGeneratorTests : UnitTest
                 throw new InvalidOperationException("Excluded, default-excluded, or dynamic route was generated.");
 
             var preservedLastWriteTime = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
-            await fileUtil.SetLastWriteTimeUtc(outputPath, preservedLastWriteTime);
+            await fileUtil.SetLastWriteTimeUtc(outputPath, preservedLastWriteTime, cancellationToken: cancellationToken);
 
             exitCode = await runner.Run(args, cancellationToken);
             if (exitCode != 0)
                 throw new InvalidOperationException($"Runner exited with {exitCode} on an unchanged generation.");
 
-            DateTime unchangedLastWriteTime = (await fileUtil.GetLastModified(outputPath))!.Value.UtcDateTime;
+            DateTime unchangedLastWriteTime = (await fileUtil.GetLastModified(outputPath, cancellationToken: cancellationToken))!.Value.UtcDateTime;
             if (unchangedLastWriteTime != preservedLastWriteTime)
                 throw new InvalidOperationException("An unchanged sitemap was rewritten.");
         }
