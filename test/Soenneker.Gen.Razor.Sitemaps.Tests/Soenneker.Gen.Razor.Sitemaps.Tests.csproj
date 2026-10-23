@@ -10,8 +10,8 @@
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <Compile Include="../../src/Soenneker.Gen.Razor.Sitemaps/SitemapAttribute.cs" Link="SitemapAttribute.cs" />
-        <PackageReference Include="Soenneker.Tests.Unit" Version="4.0.1398" />
-        <PackageReference Include="TUnit" Version="1.75.0" />
+        <PackageReference Include="Soenneker.Tests.Unit" Version="4.0.1399" />
+        <PackageReference Include="TUnit" Version="1.76.0" />
     </ItemGroup>
 
     <ItemGroup>
