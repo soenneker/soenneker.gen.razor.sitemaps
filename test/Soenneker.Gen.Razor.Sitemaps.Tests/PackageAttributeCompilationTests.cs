@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -67,40 +69,55 @@ public sealed class PackageAttributeCompilationTests
             if (disableAttributeCompile)
                 File.Copy(Path.Combine(source, "SitemapAttribute.cs"), Path.Combine(directory, "SitemapAttribute.cs"));
 
-            var startInfo = new ProcessStartInfo("dotnet")
+            string evaluatedItems = await RunDotnet(directory, cancellationToken, "msbuild", "Consumer.csproj", "-getItem:Compile");
+            using (JsonDocument document = JsonDocument.Parse(evaluatedItems))
             {
-                WorkingDirectory = directory,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            startInfo.ArgumentList.Add("build");
-            startInfo.ArgumentList.Add("Consumer.csproj");
-            startInfo.ArgumentList.Add("--nologo");
-            using Process process = Process.Start(startInfo)!;
-            Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            Task<string> error = process.StandardError.ReadToEndAsync(cancellationToken);
-            try
-            {
-                await process.WaitForExitAsync(cancellationToken);
-            }
-            finally
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    await process.WaitForExitAsync(CancellationToken.None);
-                }
+                int attributeCount = document.RootElement.GetProperty("Items").GetProperty("Compile").EnumerateArray()
+                    .Count(item => item.GetProperty("Identity").GetString()!.EndsWith("SitemapAttribute.g.cs", StringComparison.Ordinal));
+                int expectedCount = disableAttributeCompile ? 0 : 1;
+                if (attributeCount != expectedCount)
+                    throw new InvalidOperationException($"Expected {expectedCount} packaged attributes during project evaluation, found {attributeCount}.");
             }
 
-            string diagnostics = await output + await error;
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException($"Razor package consumer failed to compile: {diagnostics}");
+            await RunDotnet(directory, cancellationToken, "build", "Consumer.csproj", "--nologo");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    private static async Task<string> RunDotnet(string directory, CancellationToken cancellationToken, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (string argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+        using Process process = Process.Start(startInfo)!;
+        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> error = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(CancellationToken.None);
+            }
+        }
+
+        string diagnostics = await output + await error;
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Razor package consumer failed to compile: {diagnostics}");
+        return diagnostics;
     }
 }
