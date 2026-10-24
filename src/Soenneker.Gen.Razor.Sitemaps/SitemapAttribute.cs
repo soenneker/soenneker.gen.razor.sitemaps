@@ -1,3 +1,5 @@
+#nullable enable
+
 namespace Soenneker.Razor.Sitemap;
 
 /// <summary>

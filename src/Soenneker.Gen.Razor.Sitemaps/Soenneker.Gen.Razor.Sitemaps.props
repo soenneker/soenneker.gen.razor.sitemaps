@@ -6,19 +6,4 @@
         <_RazorSitemapAttributeSource Condition="'$(_RazorSitemapAttributeSource)'=='' and Exists('$(_RazorSitemapAttributeSourceFromProject)')">$(_RazorSitemapAttributeSourceFromProject)</_RazorSitemapAttributeSource>
     </PropertyGroup>
 
-    <ItemGroup Condition="'$(RazorSitemapDisableAttributeCompile)'!='true' and '$(_RazorSitemapAttributeCompileAdded)'!='true'">
-        <Compile Include="$(_RazorSitemapAttributeSource)" Link="Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" Visible="false" Condition="'$(_RazorSitemapAttributeSource)'!=''" />
-    </ItemGroup>
-
-    <PropertyGroup Condition="'$(RazorSitemapDisableAttributeCompile)'!='true' and '$(_RazorSitemapAttributeCompileAdded)'!='true'">
-        <_RazorSitemapAttributeCompileAdded>true</_RazorSitemapAttributeCompileAdded>
-    </PropertyGroup>
-
-    <Target Name="AddRazorSitemapAttributeCompile"
-            BeforeTargets="CoreCompile"
-            Condition="'$(RazorSitemapDisableAttributeCompile)'!='true'">
-        <ItemGroup>
-            <Compile Include="$(_RazorSitemapAttributeSource)" Link="Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" Visible="false" Condition="'$(_RazorSitemapAttributeSource)'!=''" />
-        </ItemGroup>
-    </Target>
 </Project>

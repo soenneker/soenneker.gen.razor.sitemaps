@@ -1,4 +1,10 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <!-- Register during item evaluation so Razor compilation and design-time builds see the attribute.
+         A property guard set in props is evaluated before items and would suppress its own include. -->
+    <ItemGroup Condition="'$(RazorSitemapDisableAttributeCompile)' != 'true' and '$(_RazorSitemapAttributeSource)' != ''">
+        <Compile Include="$(_RazorSitemapAttributeSource)" Exclude="@(Compile)"
+                 Link="Soenneker.Gen.Razor.Sitemaps.SitemapAttribute.g.cs" Visible="false" />
+    </ItemGroup>
 
     <Target Name="RazorSitemapGeneratorBuild_Imported" BeforeTargets="Build">
         <Message Importance="high" Text="Soenneker.Gen.Razor.Sitemaps targets imported from: $(MSBuildThisFileFullPath)" />
