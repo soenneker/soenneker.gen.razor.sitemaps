@@ -14,7 +14,7 @@
 
     <PropertyGroup>
         <Description>Automatic sitemap generation for Razor apps at build time. Fast, deterministic, and zero-runtime overhead.</Description>
-        <Version Condition="'$(BUILD_VERSION)' == ''">4.0.0</Version>
+        <Version Condition="'$(BUILD_VERSION)' == ''">11.0.0</Version>
         <Version Condition="'$(BUILD_VERSION)' != ''">$(BUILD_VERSION)</Version>
         <AssemblyName>Soenneker.Gen.Razor.Sitemaps</AssemblyName>
         <PackageId>Soenneker.Gen.Razor.Sitemaps</PackageId>
