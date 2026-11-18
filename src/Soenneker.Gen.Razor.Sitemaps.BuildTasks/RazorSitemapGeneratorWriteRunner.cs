@@ -429,7 +429,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
     {
         route = NormalizeUrl(route);
 
-        if (!route.StartsWith("/", StringComparison.Ordinal) && Uri.TryCreate(route, UriKind.Absolute, out Uri? absolute))
+        if (!route.StartsWith('/') && Uri.TryCreate(route, UriKind.Absolute, out Uri? absolute))
             return ValidateSitemapUri(absolute, route);
 
         if (string.IsNullOrWhiteSpace(baseUrl))
@@ -472,7 +472,7 @@ public sealed partial class RazorSitemapGeneratorWriteRunner : Abstract.IRazorSi
         if (Uri.TryCreate(url, UriKind.Absolute, out _))
             return url;
 
-        return url.StartsWith("/", StringComparison.Ordinal) ? url : "/" + url;
+        return url.StartsWith('/') ? url : "/" + url;
     }
 
     private static bool ShouldIncludeRoute(string? route, string componentName, SitemapMetadata metadata)
